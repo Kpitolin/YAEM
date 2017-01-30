@@ -43,7 +43,10 @@ def create_individual(bend_radius = initial_bend_radius, iris_size = initial_iri
 def initialize_individual_population(population_size = 200):
 
 	for i in range(population_size):
-		individual_list.append(create_individual())
+		indiv = create_individual()
+		indiv["fitness"] = compute_individual_fitness(indiv)
+		individual_list.append(indiv)
+
 	return individual_list
 
 def replace_random_individual(replacement_individual):
@@ -62,18 +65,29 @@ def mutate_individual(individual):
 	"""
 
 # if (numpy.random.normal(10,5,1)[0])> 10:
-	for gene in genes_list:
-		individual[gene] += numpy.random.normal(1,0.5)
-		
+	# for gene in genes_list:
+	# 	individual[gene] += numpy.random.normal()
+	individual["bend_radius"] += numpy.random.normal(0, 0.0010)
+	if individual["bend_radius"] == omega / 2:
+		individual["𝚽1_angle"] += numpy.random.normal(0, 0.00157)
+
+	individual["iris_size"] += numpy.random.normal(0, 0.00075)
+	individual["refractive_index"] += numpy.random.normal(0, 0.0002)
+
+
 	return individual
 
 
+
+# Comopute fitness just after mutation 
 def run_tournament(population_size = 200, ratio = 0.02):
 
 	"""
-	We make a tournament with 2% of population size
+	We make a tournament with ratio % of population size
 	Comment : compute_individual_fitness when the max is reproducing
 	"""
+	
+
 	nb_of_participants = population_size * ratio
 
 	participants_index_list = []
@@ -87,12 +101,10 @@ def run_tournament(population_size = 200, ratio = 0.02):
 	index_of_max = -1
 	value_of_max = -1
 
+
+
 	for index in participants_index_list:
-		if individual_list[index]["fitness"] == -1.0:
-			if not is_individual_valid(individual_list[index]):
-				individual_list[index]["fitness"] = 0.0
-			
-			individual_list[index]["fitness"] = compute_individual_fitness(individual_list[index])
+
 		if individual_list[index]["fitness"] > value_of_max:
 			value_of_max = individual_list[index]["fitness"]
 			index_of_max = index
@@ -103,6 +115,11 @@ def run_tournament(population_size = 200, ratio = 0.02):
 	individual_baby = run_individual_reproduction(individual_list[index_of_max])
 	replace_random_individual(mutate_individual(individual_baby))
 
+	if not is_individual_valid(individual_baby):
+		individual_baby["fitness"] = 0.0
+	else :
+		print "bruh"
+		individual_baby["fitness"] = compute_individual_fitness(individual_baby)
 	
 
 	
@@ -123,14 +140,27 @@ def is_individual_valid(individual):
 
 	characteristics = compute_individual_characteristics(individual)
 	A = numpy.sqrt(numpy.exp(1) / ( 0.746 * I_square_root))
-	if (not individual["𝚽1_angle"] == 0 and not individual["bend_radius"] == omega / 2) \
-	or (not individual["𝚽1_angle"] == 0 and individual["iris_size"] > omega * numpy.cos(individual["𝚽1_angle"]) / 2 ) \
-	or (individual["refractive_index"] == 1.35 and individual["𝚽1_angle"] == 0 \
-		and individual["iris_size"] > 1/2 * (omega - A))\
-	or (individual["refractive_index"] == 1.35 and not individual["𝚽1_angle"] == 0 \
-		and individual["iris_size"] > 1/2 * (omega *  numpy.cos(individual["𝚽1_angle"]) - A))\
-	or (not individual["refractive_index"] == 1.35 and  (characteristics["depth"] > characteristics["r1"] * characteristics["aperture"] / 2) \
-		or characteristics["depth"] < characteristics["aperture"] / 2):
+	if individual["bend_radius"] > 10000 or individual["bend_radius"] < omega / 2 \
+	or individual["iris_size"] < 0 or individual["iris_size"] > omega / 2 \
+	or individual["𝚽1_angle"] < 0 or individual["𝚽1_angle"] >= numpy.pi \
+	or individual["refractive_index"] > 1.55 or individual["refractive_index"] < 1.35 :
+		print "error 1"
+		return False
+
+	elif (not individual["𝚽1_angle"] == 0 and not individual["bend_radius"] == omega / 2):
+		print "error 2"
+		return False
+	elif (not individual["𝚽1_angle"] == 0 and individual["iris_size"] > omega * numpy.cos(individual["𝚽1_angle"]) / 2 ):
+		print "error 3"
+		return False
+	elif (individual["refractive_index"] == 1.35 and individual["𝚽1_angle"] == 0 and individual["iris_size"] > 1.0/2 * (omega - A)):
+		print "error 4"
+		return False
+	elif (individual["refractive_index"] == 1.35 and not individual["𝚽1_angle"] == 0 and individual["iris_size"] > 1.0/2 * (omega *  numpy.cos(individual["𝚽1_angle"]) - A)):
+		print "error 5"
+		return False
+	elif (not individual["refractive_index"] == 1.35 and  ((characteristics["depth"] > characteristics["r1"] * characteristics["aperture"] / 2) or characteristics["depth"] < characteristics["aperture"] / 2)):
+		print "error 6"
 		return False
 	else:
 		return True 
@@ -162,7 +192,7 @@ def compute_individual_characteristics(individual):
 	if individual["bend_radius"] == omega / 2:
 		individual_characteristics["depth"] = (omega / 2) * (1 + numpy.sin(individual["𝚽1_angle"]))
 		individual_characteristics["aperture"] = omega * numpy.cos(individual["𝚽1_angle"]) - 2 * individual["iris_size"]
-		individual_characteristics["r1"] = find_r1(individual_characteristics["aperture"])
+		individual_characteristics["r1"] = find_r1(individual["refractive_index"])
 		if individual["refractive_index"] == 1.35:
 			individual_characteristics["viewing_angle"] = 2 * numpy.arctan(individual_characteristics["aperture"] / 2 * individual_characteristics["depth"])
 
@@ -175,10 +205,10 @@ def compute_individual_characteristics(individual):
 
 	elif individual["bend_radius"] > omega / 2:
 
-		D = individual["bend_radius"] - (numpy.square(omega) / 4)
+		D = numpy.square(individual["bend_radius"]) - (numpy.square(omega) / 4)
 		individual_characteristics["depth"] = individual["bend_radius"] - numpy.sqrt(D)
-		individual_characteristics["aperture"] = omega - 2 * individual["iris_size"]
-		individual_characteristics["r1"] = find_r1(individual_characteristics["aperture"])
+		individual_characteristics["aperture"] = omega - (2 * individual["iris_size"])
+		individual_characteristics["r1"] = find_r1(individual["refractive_index"])
 
 		if individual["refractive_index"] == 1.35:
 			individual_characteristics["viewing_angle"] = 2 * numpy.arctan(individual_characteristics["aperture"] / 2 * individual_characteristics["depth"])
@@ -188,6 +218,8 @@ def compute_individual_characteristics(individual):
 			A =  (numpy.square(individual_characteristics["r1"]) * individual_characteristics["aperture"]) / (2 * individual_characteristics["depth"])
 			B = 1 + numpy.square(individual_characteristics["r1"]) - (A * individual_characteristics["aperture"] / (2 * individual_characteristics["depth"]))
 			C = 1 + numpy.square(individual_characteristics["r1"])
+			print "B"
+			print B
 			individual_characteristics["viewing_angle"] = 2 * numpy.arcsin((A-numpy.sqrt(B))/ C)
 
 
@@ -201,7 +233,7 @@ def compute_individual_fitness(individual):
 
 	spatial_resolution = 0
 	individual_characteristics = compute_individual_characteristics(individual)
-
+	print individual_characteristics
 	if individual["refractive_index"] == 1.35:
 		spatial_resolution = 0.375 * (individual_characteristics["depth"] / individual_characteristics["aperture"]) * numpy.sqrt(numpy.log(0.746* numpy.square(individual_characteristics["aperture"]) * I_square_root))
 
@@ -214,8 +246,10 @@ def compute_individual_fitness(individual):
 if __name__ == "__main__":
 
 	individual_list = initialize_individual_population(10)
-	while True:	
-		run_tournament(10)
-		# time.sleep(1)
+	i = 0
+	while i<50:	
+		run_tournament(10, 1)
+		i += 1
+		
 
 
